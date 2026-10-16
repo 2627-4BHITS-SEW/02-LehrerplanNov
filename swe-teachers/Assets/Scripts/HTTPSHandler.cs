@@ -1,33 +1,52 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
-using System.Collections;
+using System.Text.RegularExpressions;
+using System.Collections.Generic;
+ 
 
-// Source - https://stackoverflow.com/a/46008025
-// Posted by Programmer, modified by community. See post 'Timeline' for change history
-// Retrieved 2026-10-15, License - CC BY-SA 3.0
-public HTTPSHandler{
-
-
-
+public class HTTPSHandler : MonoBehaviour
+{
     void Start()
     {
-        StartCoroutine(getRequest("https://www.htl-salzburg.ac.at/lehrerinnen.html"));
+        StartCoroutine(GetRequestWithSelfSignedCert("https://www.htl-salzburg.ac.at/lehrerinnen.html"));
     }
 
-    
-}
-
-IEnumerator getRequest(string uri)
+    IEnumerator GetRequestWithSelfSignedCert(string uri)
     {
-        UnityWebRequest uwr = UnityWebRequest.Get(uri);
-        yield return uwr.SendWebRequest();
+        using (UnityWebRequest webRequest = UnityWebRequest.Get(uri))
+        {
+            // Attach the custom certificate handler
+            webRequest.certificateHandler = new BypassCertificate();
 
-        if (uwr.isNetworkError)
-        {
-            Debug.Log("Error While Sending: " + uwr.error);
-        }
-        else
-        {
-            Debug.Log("Received: " + uwr.downloadHandler.text);
+            yield return webRequest.SendWebRequest();
+
+            if (webRequest.result != UnityWebRequest.Result.Success)
+            {
+                Debug.LogError($"Error: {webRequest.error}");
+            }
+            else
+            {
+                Debug.Log($"Received: {webRequest.downloadHandler.text}");
+            }
+
+            string pattern = @"href\s*=\s*(?:["']([^\"\']+)[\"\']|([^\s>]+))";
+            
+            MatchCollection matches = Regex.Matches(UnityWebRequest.text, pattern, RegexOptions.IgnoreCase);
+            
+            List<string> links = new List<string>();
+            foreach (Match match in matches)
+            {
+                // Group 1 matches quoted URLs, Group 2 matches unquoted URLs
+                string url = match.Groups[1].Success ? match.Groups[1].Value : match.Groups[2].Value;
+                links.Add(url);
+            }
+
+            // Print the extracted links
+            foreach (string link in links)
+            {
+                Debug.Log($"Found link: {link}");
+            }
         }
     }
+}
